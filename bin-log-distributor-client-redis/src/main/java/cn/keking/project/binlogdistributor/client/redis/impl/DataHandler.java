@@ -8,6 +8,7 @@ import org.redisson.api.RLock;
 import org.redisson.api.RMap;
 import org.redisson.api.RQueue;
 import org.redisson.api.RedissonClient;
+import org.redisson.client.codec.JsonJacksonMapCodec;
 
 import java.util.Set;
 import java.util.UUID;
@@ -134,14 +135,14 @@ public class DataHandler implements Runnable {
             binLogDistributorClient.handle(dto);
             //如果之前有异常，恢复正常，那就处理
             if (retryTimes != 0) {
-                RMap<String, EventBaseErrDTO> errMap = redissonClient.getMap(errMapKey);
+                RMap<String, EventBaseErrDTO> errMap = redissonClient.getMap(errMapKey,new JsonJacksonMapCodec(String.class,EventBaseErrDTO.class));
                 errMap.remove(dto.getUuid());
             }
             return true;
         } catch (Exception e) {
             log.severe(e.toString());
             e.printStackTrace();
-            RMap<String, EventBaseErrDTO> errMap = redissonClient.getMap(errMapKey);
+            RMap<String, EventBaseErrDTO> errMap = redissonClient.getMap(errMapKey,new JsonJacksonMapCodec(String.class,EventBaseErrDTO.class));
             errMap.put(dto.getUuid(), new EventBaseErrDTO(dto, e,dataKey));
             try {
                 Thread.sleep(retryInterval);
@@ -149,7 +150,7 @@ public class DataHandler implements Runnable {
                 log.severe(e1.toString());
                 e1.printStackTrace();
             }
-            log.log(Level.SEVERE, "第{}次重试", ++retryTimes);
+            log.log(Level.SEVERE, "第{0}次重试", ++retryTimes);
             return doHandleWithLock(dto, retryTimes);
         }
     }
